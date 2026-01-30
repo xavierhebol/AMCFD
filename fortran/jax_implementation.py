@@ -7,9 +7,9 @@ This file contains:
 3. Function patterns and JIT compilation strategy
 
 Usage:
-    from jax_implementation import FluidState, GridParams, ...
+    from jax_implementation import State, GridParams, ...
     
-    state = FluidState(uVel=..., vVel=..., ...)
+    state = State(uVel=..., vVel=..., ...)
     new_state = state._replace(enthalpy=new_enthalpy)
 """
 
@@ -66,7 +66,7 @@ class GridParams(NamedTuple):
     nk: int
 
 
-class FluidState(NamedTuple):
+class State(NamedTuple):
     """Primary flow field variables (updated each timestep)"""
     uVel: jnp.ndarray      # x-velocity [ni, nj, nk]
     vVel: jnp.ndarray      # y-velocity [ni, nj, nk]
@@ -78,7 +78,7 @@ class FluidState(NamedTuple):
     fracl: jnp.ndarray     # Liquid fraction [ni, nj, nk]
 
 
-class FluidStatePrev(NamedTuple):
+class StatePrev(NamedTuple):
     """Previous timestep values for transient terms"""
     unot: jnp.ndarray
     vnot: jnp.ndarray
@@ -154,10 +154,10 @@ class TimeState(NamedTuple):
 """
 | Category              | Examples              | Stored In        | Updated           |
 |-----------------------|-----------------------|------------------|-------------------|
-| Persistent            | uVel, enthalpy, temp  | FluidState       | Every timestep    |
+| Persistent            | uVel, enthalpy, temp  | State       | Every timestep    |
 | Grid                  | x, y, z, vol          | GridParams       | Never (immutable) |
 | Transient coefficients| ap, ae, su, sp        | DiscretCoeffs    | Each solver call  |
-| Previous timestep     | unot, hnot            | FluidStatePrev   | Start of timestep |
+| Previous timestep     | unot, hnot            | StatePrev   | Start of timestep |
 | Derived on-demand     | fracl, vis            | Computed locally | As needed         |
 """
 
@@ -167,9 +167,9 @@ class TimeState(NamedTuple):
 
 # Timestep function signature
 @jax.jit
-def time_step(state: FluidState, state_prev: FluidStatePrev,
+def time_step(state: State, state_prev: StatePrev,
               grid: GridParams, physics: PhysicsParams,
-              laser: LaserState, sim: SimulationParams) -> FluidState:
+              laser: LaserState, sim: SimulationParams) -> State:
     """
     Advance solution by one timestep.
     All intermediate variables are local and discarded after return.
@@ -180,20 +180,20 @@ def time_step(state: FluidState, state_prev: FluidStatePrev,
     # 4. Convert H → T
     # 5. Solve momentum if melted
     # 6. Pressure correction
-    # Returns new FluidState
+    # Returns new State
     pass  # Implementation in solver.py
 
 
 @jax.jit
-def solve_enthalpy(state: FluidState, coeffs: DiscretCoeffs,
+def solve_enthalpy(state: State, coeffs: DiscretCoeffs,
                    grid: GridParams) -> jnp.ndarray:
     """TDMA solve for enthalpy field. Returns new enthalpy array."""
     pass  # Implementation in solver.py
 
 
 # Updating state (immutable pattern)
-def update_example(state: FluidState, new_enthalpy: jnp.ndarray, 
-                   new_temp: jnp.ndarray) -> FluidState:
+def update_example(state: State, new_enthalpy: jnp.ndarray, 
+                   new_temp: jnp.ndarray) -> State:
     """Example of immutable state update."""
     return state._replace(enthalpy=new_enthalpy, temp=new_temp)
 
@@ -202,10 +202,10 @@ def update_example(state: FluidState, new_enthalpy: jnp.ndarray,
 # JIT COMPILATION STRATEGY
 # =============================================================================
 
-def run_simulation(state: FluidState, state_prev: FluidStatePrev,
+def run_simulation(state: State, state_prev: StatePrev,
                    grid: GridParams, physics: PhysicsParams,
                    laser: LaserState, sim: SimulationParams,
-                   n_steps: int) -> FluidState:
+                   n_steps: int) -> State:
     """
     Run multiple timesteps efficiently using lax.scan.
     This compiles the entire loop for GPU execution.
@@ -213,7 +213,7 @@ def run_simulation(state: FluidState, state_prev: FluidStatePrev,
     def body_fn(carry, _):
         state, state_prev, laser = carry
         # Save current state as previous
-        new_prev = FluidStatePrev(
+        new_prev = StatePrev(
             unot=state.uVel,
             vnot=state.vVel,
             wnot=state.wVel,

@@ -82,7 +82,7 @@ These files contain:
 **Prompt:**
 ```
 Create state containers and parse input configuration.
-- Define NamedTuples: FluidState, FluidStatePrev, GridParams, MaterialProps, 
+- Define NamedTuples: State, StatePrev, GridParams, MaterialProps, 
   DiscretCoeffs, LaserState, PhysicsParams, SimulationParams, TimeState
 - Parse input_param.txt (namelist format) into PhysicsParams + SimulationParams
 - Physical constants: acpa, acpb, acpl, tsolid, tliquid, dgdt, emiss, sigma, hconv
@@ -122,7 +122,7 @@ Initialize flow field to preheat conditions.
 - enthalpy: computed from preheat temperature
 - temp: preheat temperature
 - fracl: 0 (solid)
-- Return FluidState NamedTuple
+- Return State NamedTuple
 ```
 **Test:** Compare initial state. Tolerance ~1e-10.
 

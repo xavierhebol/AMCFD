@@ -31,7 +31,7 @@ amcfd_jax/                    # or amcfd_taichi/
 └────────┬─────────┘
          ↓
 ┌──────────────────┐
-│ initial.create   │ → FluidState (uVel, vVel, wVel, p, enthalpy, temp)
+│ initial.create   │ → State (uVel, vVel, wVel, p, enthalpy, temp)
 └────────┬─────────┘
          ↓
 ┌──────────────────┐
@@ -65,7 +65,7 @@ amcfd_jax/                    # or amcfd_taichi/
 from typing import NamedTuple
 import jax.numpy as jnp  # or ti.types for Taichi
 
-class FluidState(NamedTuple):
+class State(NamedTuple):
     """Primary flow field variables (updated each timestep)"""
     uVel: jnp.ndarray      # x-velocity [ni, nj, nk]
     vVel: jnp.ndarray      # y-velocity [ni, nj, nk]
@@ -76,7 +76,7 @@ class FluidState(NamedTuple):
     temp: jnp.ndarray      # Temperature [ni, nj, nk]
     fracl: jnp.ndarray     # Liquid fraction [ni, nj, nk]
 
-class FluidStatePrev(NamedTuple):
+class StatePrev(NamedTuple):
     """Previous timestep values for transient terms"""
     unot: jnp.ndarray
     vnot: jnp.ndarray
@@ -169,14 +169,14 @@ class TimeState(NamedTuple):
 
 | Category | Examples | Stored In | Updated | Scope |
 |----------|----------|-----------|---------|-------|
-| **Persistent** | `uVel, enthalpy, temp` | `FluidState` | Every timestep | Global |
+| **Persistent** | `uVel, enthalpy, temp` | `State` | Every timestep | Global |
 | **Grid** | `x, y, z, vol, areas` | `GridParams` | Never | Global (immutable) |
 | **Physics** | `acpa, tsolid, dgdt` | `PhysicsParams` | Never | Global (immutable) |
 | **Simulation** | `delt, urf_vel` | `SimulationParams` | Never | Global (immutable) |
 | **Time** | `timet, iter, step` | `TimeState` | Every timestep | Global |
 | **Properties** | `vis, diff, den` | `MaterialProps` | Each iteration | Global |
 | **Coefficients** | `ap, ae, su, sp` | `DiscretCoeffs` | Each solve | Transient |
-| **Previous** | `unot, hnot` | `FluidStatePrev` | Start of timestep | Global |
+| **Previous** | `unot, hnot` | `StatePrev` | Start of timestep | Global |
 | **Laser** | `beam_pos, heatin` | `LaserState` | Each timestep | Global |
 | **Derived** | `fracl` | Computed locally | As needed | Local |
 
@@ -201,7 +201,7 @@ These exist only within function scope:
 | `types.py` | - | - | NamedTuples | Data structure definitions |
 | `io.py` | `mod_param`, `mod_print` | input_param.txt | Params, output files | Parse namelist format |
 | `grid.py` | `mod_geom` | Params | `GridParams` | Power-law stretching |
-| `initial.py` | `mod_init` | Params, Grid | `FluidState` | Initialize to preheat T |
+| `initial.py` | `mod_init` | Params, Grid | `State` | Initialize to preheat T |
 | `properties.py` | `mod_prop`, `mod_entot` | State, Params | `MaterialProps`, T↔H | 3-region phase change |
 | `laser.py` | `mod_laser`, `mod_toolpath` | .crs file, time | `LaserState` | Gaussian heat source |
 | `boundary.py` | `mod_bound` | State, ivar | Updated su/sp | Marangoni, radiation |
@@ -219,9 +219,9 @@ These exist only within function scope:
 ```python
 # JAX: Compile entire iteration as single unit
 @jax.jit
-def iteration_step(state: FluidState, state_prev: FluidStatePrev,
+def iteration_step(state: State, state_prev: StatePrev,
                    grid: GridParams, physics: PhysicsParams,
-                   laser: LaserState, sim: SimulationParams) -> FluidState:
+                   laser: LaserState, sim: SimulationParams) -> State:
     # 1. Compute laser heat input
     heatin = laser_heat(laser, grid)
     # 2. Apply boundary conditions (updates su, sp)
@@ -247,7 +247,7 @@ def time_loop(state, grid, physics, laser, sim):
     def body_fn(carry):
         state, time_state = carry
         # Save previous state
-        state_prev = FluidStatePrev(unot=state.uVel, ...)
+        state_prev = StatePrev(unot=state.uVel, ...)
         # Inner iteration loop
         state = converge_loop(state, state_prev, grid, physics, laser, sim)
         # Update time
