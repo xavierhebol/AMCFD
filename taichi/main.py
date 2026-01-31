@@ -24,9 +24,11 @@ from data_structures import (
     TimeState, PoolDimensions, ConvergenceState
 )
 
-# I/O and geometry
-from param import parse_input, load_toolpath
+# I/O, geometry, and toolpath
+from param import parse_input
+from toolpath import load_toolpath, read_coordinates as toolpath_read_coordinates
 from geom import get_gridparams
+from entot import enthalpy_to_temp as entot_enthalpy_to_temp
 
 # TODO: These modules will be created from corresponding .f90 files
 # from initialization import initialize
@@ -37,11 +39,9 @@ from geom import get_gridparams
 # from solver import solution_enthalpy, solution_uvw
 # from fluxes import heat_fluxes
 # from properties import properties
-# from entotemp import enthalpy_to_temp
 # from convergence import enhance_converge_speed
 # from revision import revision_p
 # from laserinput import laser_beam, calc_rhf
-# from toolpath import read_coordinates
 # from printing import output_results, custom_output
 
 
@@ -178,12 +178,12 @@ def enthalpy_to_temp(state: State, physics: PhysicsParams) -> State:
     """Convert enthalpy field to temperature. (From entotemp.f90)
     
     Translates enthalpy to temperature, handling phase change.
+    Uses the implementation from entot.py module.
     
     Returns:
         state: Updated state with temperature and liquid fraction fields
     """
-    # TODO: Implement enthalpy-to-temperature conversion with mushy zone
-    return state
+    return entot_enthalpy_to_temp(state, physics)
 
 
 def pool_size(state: State, grid: GridParams, physics: PhysicsParams,
@@ -269,12 +269,12 @@ def read_coordinates(time_state: TimeState, toolpath: ToolPath,
     """Read/interpolate coordinates from toolpath. (From toolpath.f90)
     
     Reads current position along toolpath based on simulation time.
+    Uses the implementation from toolpath.py module.
     
     Returns:
         laser_state: Updated with current beam coordinates
     """
-    # TODO: Interpolate toolpath to get current coordinates
-    return laser_state
+    return toolpath_read_coordinates(time_state, toolpath, laser_state)
 
 
 def output_results(time_state: TimeState, state: State, conv: ConvergenceState,
