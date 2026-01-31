@@ -28,12 +28,14 @@ from data_structures import (
 from param import parse_input
 from toolpath import load_toolpath, read_coordinates as toolpath_read_coordinates
 from geom import get_gridparams
+from bound import bound_condition
 from entot import enthalpy_to_temp as entot_enthalpy_to_temp
+from dimen import pool_size, clean_uvw
+from revise import revision_p as revise_revision_p
 
 # TODO: These modules will be created from corresponding .f90 files
 # from initialization import initialize
 # from discretization import discretize
-# from boundary import bound_condition
 # from source import source_term
 # from residue import residual
 # from solver import solution_enthalpy, solution_uvw
@@ -76,20 +78,6 @@ def properties(state: State, mat_props: MaterialProps, physics: PhysicsParams) -
     """
     # TODO: Implement temperature-dependent viscosity, diffusion, etc.
     return mat_props
-
-
-def bound_condition(ivar: int, state: State, grid: GridParams, 
-                    coeffs: DiscretCoeffs, physics: PhysicsParams) -> DiscretCoeffs:
-    """Apply boundary conditions. (From boundary.f90)
-    
-    Args:
-        ivar: Variable index (1=u, 2=v, 3=w, 4=p, 5=enthalpy)
-        
-    Returns:
-        coeffs: Updated discretization coefficients with BC applied
-    """
-    # TODO: Implement thermal and velocity boundary conditions
-    return coeffs
 
 
 def discretize(ivar: int, state: State, grid: GridParams, 
@@ -193,12 +181,14 @@ def pool_size(state: State, grid: GridParams, physics: PhysicsParams,
     Gets melt pool dimension, start and end index of i,j,k to determine fluid region.
     Also updates pool.max_temp (tpeak in Fortran).
     
+    NOTE: This is now imported from dimen.py module
+    
     Returns:
         tuple: (ist, ien, jst, jen, kst, ken) - start/end indices for melt pool region
     """
-    # TODO: Find liquid region bounds and compute pool dimensions
-    pool.max_temp = 300.0  # Placeholder - should compute actual peak temp
-    return (1, 1, 1, 1, 1, 1)  # ist, ien, jst, jen, kst, ken
+    # This import is at module level now
+    from dimen import pool_size as dimen_pool_size
+    return dimen_pool_size(state, grid, physics, pool)
 
 
 def clean_uvw(state: State, grid: GridParams, physics: PhysicsParams) -> State:
@@ -206,11 +196,14 @@ def clean_uvw(state: State, grid: GridParams, physics: PhysicsParams) -> State:
     
     Sets velocity to zero for cells where temp <= tsolid (outside liquid region).
     
+    NOTE: This is now imported from dimen.py module
+    
     Returns:
         state: Updated state with velocities zeroed in solid region
     """
-    # TODO: Zero velocities in solid cells
-    return state
+    # This import is at module level now
+    from dimen import clean_uvw as dimen_clean_uvw
+    return dimen_clean_uvw(state, grid, physics)
 
 
 def revision_p(state: State, coeffs: DiscretCoeffs, grid: GridParams,
@@ -219,10 +212,15 @@ def revision_p(state: State, coeffs: DiscretCoeffs, grid: GridParams,
     
     Corrects pressure and velocities using SIMPLE algorithm.
     
+    NOTE: This is now imported from revise.py module.
+    The actual function signature requires additional parameters (ivar, physics, domain bounds).
+    This wrapper is kept for compatibility but needs updating in the main loop.
+    
     Returns:
         state: Updated state with corrected pressure and velocities
     """
-    # TODO: Implement SIMPLE pressure-velocity coupling
+    # This needs to be called with proper parameters in the main loop
+    # For now, return unchanged state
     return state
 
 
@@ -325,6 +323,24 @@ def main():
     # Read input parameters (corresponds to read_data in Fortran)
     print("Reading input parameters...")
     physics, sim, laser, output_cfg = parse_input(str(input_yaml))
+    simu_params = SimulationParams(
+        delt=sim.delt,
+        timax=sim.timax,
+        urf_vel=sim.urf_vel,
+        urf_p=sim.urf_p,
+        urf_h=sim.urf_h,
+        max_iter=sim.max_iter,
+        conv_tol=sim.conv_tol,
+        ni=sim.ni,
+        nj=sim.nj,
+        nk=sim.nk,
+        xlen=sim.xlen,
+        ylen=sim.ylen,
+        zlen=sim.zlen,
+        stretch_x=sim.stretch_x,
+        stretch_y=sim.stretch_y,
+        stretch_z=sim.stretch_z,
+    )
     
     # Read toolpath (corresponds to read_toolpath in Fortran)
     if toolpath_file.exists():
@@ -342,7 +358,7 @@ def main():
     
     # Allocate state arrays
     print("Allocating state arrays...")
-    state = State()
+    state = State(ni, nj, nk)
     state_prev = StatePrev(ni, nj, nk)
     mat_props = MaterialProps(ni, nj, nk)
     coeffs = DiscretCoeffs(ni, nj, nk)
@@ -398,7 +414,7 @@ def main():
             ivar = 5
             
             properties(state, mat_props, physics)
-            bound_condition(ivar, state, grid, coeffs, physics)
+            ahtoploss = bound_condition(ivar, state, grid, mat_props, physics, simu_params, laser_state)
             discretize(ivar, state, grid, coeffs, mat_props, sim, physics)
             source_term(ivar, state, state_prev, grid, coeffs, 
                        laser_state, physics, sim)
@@ -422,7 +438,7 @@ def main():
                 
                 # Solve momentum equations (ivar=1,2,3) and pressure (ivar=4)
                 for ivar in range(1, 5):
-                    bound_condition(ivar, state, grid, coeffs, physics)
+                    bound_condition(ivar, state, grid, mat_props, physics, simu_params)
                     discretize(ivar, state, grid, coeffs, mat_props, sim, physics)
                     source_term(ivar, state, state_prev, grid, coeffs,
                                laser_state, physics, sim)
