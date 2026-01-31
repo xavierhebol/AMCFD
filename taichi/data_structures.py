@@ -14,7 +14,7 @@ import taichi as ti
 import numpy as np
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class PhysicsParams:
     """Physical constants and material properties (from mod_const.f90, mod_param.f90)"""
     # Specific heat coefficients (solid: Cp = acpa*T + acpb)
@@ -65,7 +65,7 @@ class PhysicsParams:
     darcy_coeff: float = 1.0e6  # Darcy coefficient for mushy zone damping
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class SimulationParams:
     """Numerical/simulation parameters (from mod_param.f90)"""
     # Time stepping
@@ -95,6 +95,50 @@ class SimulationParams:
     stretch_x: float = 1.0      # Power-law exponent for x
     stretch_y: float = 1.0      # Power-law exponent for y
     stretch_z: float = 1.0      # Power-law exponent for z
+    
+    # Derived index bounds (computed in __post_init__)
+    istat: int = 0              # Start index in i (typically 0 in Python)
+    jstat: int = 0              # Start index in j
+    kstat: int = 0              # Start index in k
+    iend: int = 0               # End index in i (ni)
+    jend: int = 0               # End index in j (nj)
+    kend: int = 0               # End index in k (nk)
+    istatp1: int = 0            # istat + 1
+    jstatp1: int = 0            # jstat + 1
+    kstatp1: int = 0            # kstat + 1
+    iendm1: int = 0             # iend - 1
+    jendm1: int = 0             # jend - 1
+    kendm1: int = 0             # kend - 1
+    nim1: int = 0               # ni - 1
+    njm1: int = 0               # nj - 1
+    nkm1: int = 0               # nk - 1
+    
+    def __post_init__(self):
+        """Compute derived index bounds."""
+        # Start indices (0-based Python)
+        self.istat = 0
+        self.jstat = 0
+        self.kstat = 0
+        
+        # End indices
+        self.iend = self.ni
+        self.jend = self.nj
+        self.kend = self.nk
+        
+        # Start + 1
+        self.istatp1 = self.istat + 1
+        self.jstatp1 = self.jstat + 1
+        self.kstatp1 = self.kstat + 1
+        
+        # End - 1
+        self.iendm1 = self.iend - 1
+        self.jendm1 = self.jend - 1
+        self.kendm1 = self.kend - 1
+        
+        # Dimension - 1
+        self.nim1 = self.ni - 1
+        self.njm1 = self.nj - 1
+        self.nkm1 = self.nk - 1
 
 
 @dataclass

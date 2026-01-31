@@ -27,11 +27,11 @@ from data_structures import (
 # I/O and geometry
 from param import parse_input, load_toolpath
 from geom import get_gridparams
+from bound import bound_condition
 
 # TODO: These modules will be created from corresponding .f90 files
 # from initialization import initialize
 # from discretization import discretize
-# from boundary import bound_condition
 # from source import source_term
 # from residue import residual
 # from solver import solution_enthalpy, solution_uvw
@@ -76,20 +76,6 @@ def properties(state: State, mat_props: MaterialProps, physics: PhysicsParams) -
     """
     # TODO: Implement temperature-dependent viscosity, diffusion, etc.
     return mat_props
-
-
-def bound_condition(ivar: int, state: State, grid: GridParams, 
-                    coeffs: DiscretCoeffs, physics: PhysicsParams) -> DiscretCoeffs:
-    """Apply boundary conditions. (From boundary.f90)
-    
-    Args:
-        ivar: Variable index (1=u, 2=v, 3=w, 4=p, 5=enthalpy)
-        
-    Returns:
-        coeffs: Updated discretization coefficients with BC applied
-    """
-    # TODO: Implement thermal and velocity boundary conditions
-    return coeffs
 
 
 def discretize(ivar: int, state: State, grid: GridParams, 
@@ -325,6 +311,24 @@ def main():
     # Read input parameters (corresponds to read_data in Fortran)
     print("Reading input parameters...")
     physics, sim, laser, output_cfg = parse_input(str(input_yaml))
+    simu_params = SimulationParams(
+        delt=sim.delt,
+        timax=sim.timax,
+        urf_vel=sim.urf_vel,
+        urf_p=sim.urf_p,
+        urf_h=sim.urf_h,
+        max_iter=sim.max_iter,
+        conv_tol=sim.conv_tol,
+        ni=sim.ni,
+        nj=sim.nj,
+        nk=sim.nk,
+        xlen=sim.xlen,
+        ylen=sim.ylen,
+        zlen=sim.zlen,
+        stretch_x=sim.stretch_x,
+        stretch_y=sim.stretch_y,
+        stretch_z=sim.stretch_z,
+    )
     
     # Read toolpath (corresponds to read_toolpath in Fortran)
     if toolpath_file.exists():
@@ -342,7 +346,7 @@ def main():
     
     # Allocate state arrays
     print("Allocating state arrays...")
-    state = State()
+    state = State(ni, nj, nk)
     state_prev = StatePrev(ni, nj, nk)
     mat_props = MaterialProps(ni, nj, nk)
     coeffs = DiscretCoeffs(ni, nj, nk)
@@ -398,7 +402,7 @@ def main():
             ivar = 5
             
             properties(state, mat_props, physics)
-            bound_condition(ivar, state, grid, coeffs, physics)
+            ahtoploss = bound_condition(ivar, state, grid, mat_props, physics, simu_params, laser_state)
             discretize(ivar, state, grid, coeffs, mat_props, sim, physics)
             source_term(ivar, state, state_prev, grid, coeffs, 
                        laser_state, physics, sim)
@@ -422,7 +426,7 @@ def main():
                 
                 # Solve momentum equations (ivar=1,2,3) and pressure (ivar=4)
                 for ivar in range(1, 5):
-                    bound_condition(ivar, state, grid, coeffs, physics)
+                    bound_condition(ivar, state, grid, mat_props, physics, simu_params)
                     discretize(ivar, state, grid, coeffs, mat_props, sim, physics)
                     source_term(ivar, state, state_prev, grid, coeffs,
                                laser_state, physics, sim)
