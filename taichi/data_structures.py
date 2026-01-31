@@ -229,7 +229,9 @@ class StatePrev:
         self.unot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))
         self.vnot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))
         self.wnot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))
+        self.tnot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))   # Previous temperature
         self.hnot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))
+        self.fraclnot = ti.field(dtype=ti.f64, shape=(ni, nj, nk))  # Previous liquid fraction
 
 
 @ti.data_oriented
